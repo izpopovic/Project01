@@ -2,9 +2,11 @@
 using Application.Interfaces;
 using Domain.Entities;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.VisualBasic;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -27,14 +29,20 @@ namespace Application.Folders.Commands.DeleteFolder
 
 		public async Task<Unit> Handle(DeleteFolderCommand request, CancellationToken cancellationToken)
 		{
-			var entity = await _context.Folders.FindAsync(request.Id);
+			var folder = await _context.Folders.Include(f => f.Files).FirstOrDefaultAsync(f => f.Id == request.Id);
 
-			if (entity == null)
+			if (folder == null)
 			{
 				throw new NotFoundException(nameof(Folder), request.Id);
 			}
 
-			_context.Folders.Remove(entity);
+			var files = folder.Files;
+			if (files.Count > 0)
+			{
+				_context.Files.RemoveRange(files);
+			}
+
+			_context.Folders.Remove(folder);
 
 			await _context.SaveChangesAsync(cancellationToken);
 
