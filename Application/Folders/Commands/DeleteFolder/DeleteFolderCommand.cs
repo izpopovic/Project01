@@ -29,24 +29,39 @@ namespace Application.Folders.Commands.DeleteFolder
 
 		public async Task<Unit> Handle(DeleteFolderCommand request, CancellationToken cancellationToken)
 		{
-			var folder = await _context.Folders.Include(f => f.Files).FirstOrDefaultAsync(f => f.Id == request.Id);
+
+			var folder = await _context.Folders.Include(f => f.Children).ThenInclude(f => f.Files).FirstOrDefaultAsync(f => f.Id == request.Id);
 
 			if (folder == null)
 			{
 				throw new NotFoundException(nameof(Folder), request.Id);
 			}
 
-			var files = folder.Files;
-			if (files.Count > 0)
-			{
-				_context.Files.RemoveRange(files);
-			}
+			await RemoveChildren(folder.Id);
 
-			_context.Folders.Remove(folder);
+			if (folder.Files != null && folder.Files.Count > 0)
+			{
+				_context.Files.RemoveRange(folder.Files);
+			}
 
 			await _context.SaveChangesAsync(cancellationToken);
 
 			return Unit.Value;
+		}
+
+		public async Task RemoveChildren(int i)
+		{
+			var childrenFolders = await _context.Folders.Include(f => f.Children).ThenInclude(f => f.Files).Where(f => f.ParentId == i).ToListAsync();
+
+			foreach (var child in childrenFolders)
+			{
+				await RemoveChildren(child.Id);
+				foreach (var file in child.Files)
+				{
+					_context.Files.Remove(file);
+				}
+				_context.Folders.Remove(child);
+			}
 		}
 	}
 }
